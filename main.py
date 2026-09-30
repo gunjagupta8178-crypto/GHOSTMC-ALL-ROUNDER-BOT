@@ -1,122 +1,119 @@
 import discord
 from discord.ext import commands
-import asyncio, os, yt_dlp
-
-TOKEN = os.getenv("TOKEN")
-SONG_URL = "https://www.youtube.com/watch?v=AbkEmJgMCU"
+import json
+import os
 
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix=".", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-ytdl = yt_dlp.YoutubeDL({'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True, 'default_search': 'auto'})
-FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
-autorespond = {}
+WELCOME_FILE = "welcome.json"
+WELCOME_CH = None
+if os.path.exists(WELCOME_FILE):
+    try:
+        WELCOME_CH = json.load(open(WELCOME_FILE)).get("channel_id")
+    except:
+        WELCOME_CH = None
 
+TICKET_FILE = "ticket.json"
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} commands")
+    except Exception as e:
+        print(e)
+
+# ===== TICKET SYSTEM - PICHLA WALA =====
 class CloseTicketView(discord.ui.View):
-    def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.red, custom_id="close_bh")
-    async def close(self, interaction, button):
-        await interaction.response.send_message("Closing...", ephemeral=True)
-        await asyncio.sleep(2)
-        await interaction.channel.delete()
-
-class TicketSelect(discord.ui.Select):
     def __init__(self):
-        options = [
-            discord.SelectOption(label="BUY", emoji="🛒"),
-            discord.SelectOption(label="CLAIM", emoji="🎁"),
-            discord.SelectOption(label="REWARDS", emoji="🏆"),
-            discord.SelectOption(label="REPORT", emoji="🚨"),
-            discord.SelectOption(label="APPLY", emoji="📝"),
-        ]
-        super().__init__(placeholder="Ticket Select Karo...", options=options, custom_id="ticket_bh")
-    async def callback(self, interaction):
-        guild = interaction.guild
-        overwrites = {guild.default_role: discord.PermissionOverwrite(view_channel=False), interaction.user: discord.PermissionOverwrite(view_channel=True)}
-        channel = await guild.create_text_channel(name=f"{self.values[0].lower()}-{interaction.user.name}", overwrites=overwrites)
-        await channel.send(f"{interaction.user.mention} Staff wait karo", view=CloseTicketView())
-        await interaction.response.send_message(f"Ban gaya {channel.mention}", ephemeral=True)
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🔒 Close Ticket", style=discord.ButtonStyle.red)
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Ticket 5 sec me band ho jayega...", ephemeral=True)
+        import asyncio
+        await asyncio.sleep(5)
+        await interaction.channel.delete()
 
 class TicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(TicketSelect())
 
-async def play_loop(vc):
-    while True:
-        try:
-            if not vc.is_connected():
-                break
-            if not vc.is_playing() and not vc.is_paused():
-                info = ytdl.extract_info(SONG_URL, download=False)
-                vc.play(discord.FFmpegPCMAudio(info['url'], **FFMPEG_OPTIONS))
-            await asyncio.sleep(10)
-        except Exception as e:
-            print(f"Play error: {e}")
-            await asyncio.sleep(5)
-
-@bot.event
-async def on_ready():
-    print(f"Online: {bot.user}")
-    bot.add_view(TicketView())
-    bot.add_view(CloseTicketView())
-    await bot.tree.sync()
-
-@bot.tree.command(name="ticketpanel", description="Ticket panel bhejo")
-async def ticketpanel(interaction):
-    embed = discord.Embed(title="GHOSTMC SUPPORT", description="🎫 BUY\n🎁 CLAIM\n🏆 REWARDS\n🚨 REPORT\n📝 APPLY", color=0x00ff00)
-    await interaction.channel.send(embed=embed, view=TicketView())
-    await interaction.response.send_message("Done ✅", ephemeral=True)
-
-@bot.tree.command(name="join", description="VC me join hoga")
-async def join_command(interaction: discord.Interaction):
-    try:
-        await interaction.response.defer(ephemeral=True)
-
-        if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.followup.send("Tu pehle kisi VC me jaa bhai! 😅", ephemeral=True)
+    @discord.ui.button(label="🎫 Create Ticket", style=discord.ButtonStyle.green, custom_id="create_ticket")
+    async def create_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        # Agar ticket pehle se hai to nahi banega
+        existing = discord.utils.get(guild.text_channels, name=f"ticket-{interaction.user.name.lower()}")
+        if existing:
+            await interaction.response.send_message(f"Tera ticket pehle se hai {existing.mention}", ephemeral=True)
             return
 
-        channel = interaction.user.voice.channel
-        
-        if interaction.guild.voice_client:
-            await interaction.guild.voice_client.move_to(channel)
-            await interaction.followup.send(f"Moved to {channel.name} ✅", ephemeral=True)
-        else:
-            await channel.connect()
-            await interaction.followup.send(f"Joined {channel.name} ✅", ephemeral=True)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_messages=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        }
+        channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
+        embed = discord.Embed(title="GHOSTMC SUPPORT", description=f"{interaction.user.mention} Support team jaldi aayegi, apna issue batao!", color=0x00FF00)
+        await channel.send(embed=embed, view=CloseTicketView())
+        await interaction.response.send_message(f"Ticket bana {channel.mention}", ephemeral=True)
 
-    except Exception as e:
-        # Error ko Discord pe bhej dega taki pata chale
-        try:
-            await interaction.followup.send(f"Error: `{e}`", ephemeral=True)
-        except:
-            await interaction.response.send_message(f"Error: `{e}`", ephemeral=True)
-        print(f"JOIN ERROR: {e}")
+@bot.tree.command(name="ticketpanel", description="Ticket panel bheje")
+async def ticketpanel(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="👻 GHOSTMC - SUPPORT TICKET",
+        description="**Koi problem hai?**\n\n> 📦 Buy related issue\n> ⛏️ SMP me problem\n> 👤 Player report\n\nNiche button dabao aur apna ticket kholo!",
+        color=0x00FF00
+    )
+    embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
+    await interaction.response.send_message(embed=embed, view=TicketView())
+    bot.add_view(TicketView()) # restart pe bhi kaam karega
 
-@bot.tree.command(name="leave", description="VC se nikal")
-async def leave_cmd(interaction):
-    if interaction.guild.voice_client:
-        await interaction.guild.voice_client.disconnect()
-        await interaction.response.send_message("Nikal gaya 😴")
-    else:
-        await interaction.response.send_message("Me VC me nahi hu", ephemeral=True)
+# ===== WELCOME SET =====
+@bot.tree.command(name="welcomeset", description="Welcome yaha ayega")
+async def welcomeset(interaction: discord.Interaction):
+    global WELCOME_CH
+    WELCOME_CH = interaction.channel.id
+    json.dump({"channel_id": WELCOME_CH}, open(WELCOME_FILE, "w"))
+    await interaction.response.send_message(f"Welcome set {interaction.channel.mention} pe", ephemeral=True)
 
-@bot.tree.command(name="say", description="Bot se bulwao")
-async def say_cmd(interaction, message: str):
+@bot.event
+async def on_member_join(member):
+    if not WELCOME_CH:
+        return
+    ch = member.guild.get_channel(WELCOME_CH)
+    if not ch:
+        return
+    desc = f"""
+╔════════════════════╗
+   👻 WELCOME TO GHOSTMC 👻
+╚════════════════════╝
+
+Hey {member.mention} ! Welcome to the most haunted & powerful SMP! ⛏️
+
+> 🌍 **IP:** `upcomming`
+> 📌 **Version:** 1.21.11 | Crossplay 
+> 🔗 **Store:** #buy-here
+> 🎫 **Support:** #🎫・tickets
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+**🔥 KYA TUM APNA DOSTO KO INVITE KAROGA?**
+
+
+
+Members: {member.guild.member_count} 👻
+"""
+    embed = discord.Embed(description=desc, color=0x00FF00)
+    embed.set_thumbnail(url=member.display_avatar.url)
+    await ch.send(embed=embed)
+
+# ===== SAY CMD =====
+@bot.tree.command(name="say", description="Bot se kuch bulwao")
+async def say(interaction: discord.Interaction, message: str):
     await interaction.response.send_message("Bhej diya", ephemeral=True)
     await interaction.channel.send(message)
 
-@bot.tree.command(name="autoresponder", description="Auto reply")
-async def auto_cmd(interaction, word: str, reply: str):
-    autorespond[word.lower()] = reply
-    await interaction.response.send_message(f"Set: {word} -> {reply} ✅", ephemeral=True)
-
-@bot.event
-async def on_message(message):
-    if message.author.bot: return
-    if message.content.lower() in autorespond:
-        await message.channel.send(autorespond[message.content.lower()])
-    await bot.process_commands(message)
-
+TOKEN = os.environ.get("TOKEN") or "APNA_TOKEN_YAHA_DALO"
 bot.run(TOKEN)
