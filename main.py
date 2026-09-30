@@ -68,22 +68,31 @@ async def ticketpanel(interaction):
     await interaction.channel.send(embed=embed, view=TicketView())
     await interaction.response.send_message("Done ✅", ephemeral=True)
 
-@bot.tree.command(name="join", description="24/7 Music VC")
-async def join_cmd(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    if not interaction.user.voice:
-        return await interaction.followup.send("VC me jaa pehle!", ephemeral=True)
+@bot.tree.command(name="join", description="VC me join hoga")
+async def join_command(interaction: discord.Interaction):
     try:
-        vc = interaction.guild.voice_client
-        if not vc:
-            vc = await interaction.user.voice.channel.connect()
+        await interaction.response.defer(ephemeral=True)
+
+        if not interaction.user.voice or not interaction.user.voice.channel:
+            await interaction.followup.send("Tu pehle kisi VC me jaa bhai! 😅", ephemeral=True)
+            return
+
+        channel = interaction.user.voice.channel
+        
+        if interaction.guild.voice_client:
+            await interaction.guild.voice_client.move_to(channel)
+            await interaction.followup.send(f"Moved to {channel.name} ✅", ephemeral=True)
         else:
-            await vc.move_to(interaction.user.voice.channel)
-        await interaction.followup.send(f"Join ho gaya {interaction.user.voice.channel.mention}")
-        asyncio.create_task(play_loop(vc))
+            await channel.connect()
+            await interaction.followup.send(f"Joined {channel.name} ✅", ephemeral=True)
+
     except Exception as e:
-        print(f"Join error: {e}")
-        await interaction.followup.send(f"Error: {e}", ephemeral=True)
+        # Error ko Discord pe bhej dega taki pata chale
+        try:
+            await interaction.followup.send(f"Error: `{e}`", ephemeral=True)
+        except:
+            await interaction.response.send_message(f"Error: `{e}`", ephemeral=True)
+        print(f"JOIN ERROR: {e}")
 
 @bot.tree.command(name="leave", description="VC se nikal")
 async def leave_cmd(interaction):
