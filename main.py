@@ -165,12 +165,12 @@ class TicketView(discord.ui.View):
             interaction.guild.me: discord.PermissionOverwrite(view_channel=True)
         }
         channel = await interaction.guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
-        await channel.send(f"{interaction.user.mention} Apna issue yaha batao!")
+        await channel.send(f"{interaction.user.mention} APNA KAM YHA BATYA !")
         await interaction.response.send_message(f"Ticket bana: {channel.mention}", ephemeral=True)
 
 @bot.tree.command(name="ticket", description="Ticket panel bhejo")
 async def ticket_cmd(interaction: discord.Interaction):
-    embed = discord.Embed(title="🎫 GHOSTMC SUPPORT", description="Support chahiye? Button dabao!", color=0x2b2d31)
+    embed = discord.Embed(title="🎫 MAKE TICKET FOR EVERY TGINGS", description="dont make for fun=ban!", color=0x2b2d31)
     await interaction.channel.send(embed=embed, view=TicketView())
     await interaction.response.send_message("Panel bhej diya ✅", ephemeral=True)
 
